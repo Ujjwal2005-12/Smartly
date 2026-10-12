@@ -5,23 +5,15 @@ const authorize = require('../middleware/authorize');
 
 const router = express.Router();
 
-/**
- * Public Authentication Route
- * POST /api/auth/login
- */
+// Public Authentication Routes
+router.post('/register', authController.register);
 router.post('/login', authController.login);
 
-/**
- * Authenticated User Session Route
- * GET /api/auth/me
- */
+// Authenticated User Session & Profile Routes
 router.get('/me', authenticate, authController.getMe);
+router.put('/change-password', authenticate, authController.changePassword);
 
-/**
- * Role-Restricted Demonstration Route
- * GET /api/auth/admin-only
- * Requires valid JWT and ADMIN role.
- */
+// Role-Restricted Demonstration Route
 router.get('/admin-only', authenticate, authorize('ADMIN'), authController.adminOnly);
 
 module.exports = router;

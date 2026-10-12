@@ -1,6 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/auth.routes');
+const roomRoutes = require('./routes/roomRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
+const userRoutes = require('./routes/userRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
@@ -13,8 +17,12 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Mount Authentication Module
+// Mount Modules
 app.use('/api/auth', authRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {
