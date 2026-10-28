@@ -32,7 +32,6 @@ const authController = {
       if (!EMAIL_REGEX.test(trimmedEmail)) {
         return res.status(400).json({ message: 'Invalid email format' });
       }
-
       if (password.length < 6) {
         return res.status(400).json({ message: 'Password must be at least 6 characters long' });
       }
@@ -54,13 +53,7 @@ const authController = {
         role: 'STUDENT',
         isActive: 1
       });
-
-      // 5. Generate JWT token
-      const token = generateToken({
-        id: newUser.id,
-        role: newUser.role
-      });
-
+      const token = generateToken({ id: newUser.id, role: newUser.role });
       return res.status(201).json({
         message: 'User registered successfully',
         token,

@@ -76,6 +76,10 @@ const bookingRepository = {
     return requestRepository.updateStatus(id, update);
   },
 
+  async approve(id, reviewedBy) {
+    return requestRepository.approve(id, reviewedBy);
+  },
+
   /**
    * Cancels a booking.
    * @param {number|string} id

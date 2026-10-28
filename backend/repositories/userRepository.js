@@ -146,6 +146,11 @@ const userRepository = {
     const query = 'UPDATE users SET is_active = 0 WHERE id = ?';
     const [result] = await pool.query(query, [id]);
     return result.affectedRows > 0;
+  },
+
+  async countActiveAdmins() {
+    const [rows] = await pool.query("SELECT COUNT(*) AS total FROM users WHERE role = 'ADMIN' AND is_active = 1");
+    return Number(rows[0]?.total || 0);
   }
 };
 

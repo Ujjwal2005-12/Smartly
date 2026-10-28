@@ -3,14 +3,26 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const app = require('../app');
 const { generateToken } = require('../utils/token');
+const dashboardRepository = require('../repositories/dashboardRepository');
+const userRepository = require('../repositories/userRepository');
 
 let server;
 let baseUrl;
 
 const studentToken = generateToken({ id: 3, role: 'STUDENT' });
+const originalGetStats = dashboardRepository.getStats;
+const originalFindUserById = userRepository.findUserById;
 
 describe('Dashboard Analytics Test Suite', () => {
   before(async () => {
+    dashboardRepository.getStats = async () => ({
+      summary: { totalUsers: 3, activeUsers: 3, totalFacilities: 2, availableFacilities: 2, totalBookings: 1, pendingBookings: 1 },
+      users: { students: 1, faculty: 1, admins: 1 },
+      facilities: { rooms: 2, labs: 0, halls: 0, available: 2, maintenance: 0, occupied: 0 },
+      bookings: { total: 1, pending: 1, approved: 0, rejected: 0, cancelled: 0 },
+      recentActivity: []
+    });
+    userRepository.findUserById = async (id) => ({ id: Number(id), role: 'STUDENT', is_active: 1 });
     server = http.createServer(app);
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
@@ -18,9 +30,9 @@ describe('Dashboard Analytics Test Suite', () => {
   });
 
   after(async () => {
-    const pool = require('../config/db');
     await new Promise((resolve) => server.close(resolve));
-    await pool.end();
+    dashboardRepository.getStats = originalGetStats;
+    userRepository.findUserById = originalFindUserById;
   });
 
   test('1. GET /api/dashboard/stats rejects unauthenticated requests with 401', async () => {

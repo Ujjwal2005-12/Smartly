@@ -8,6 +8,7 @@ const bookingRepository = require('../repositories/bookingRepository');
 
 describe('Database Repositories & Data Layer Test Suite (Member 2)', () => {
   let originalPoolQuery;
+  let originalGetConnection;
   let queries = [];
   let mockQueryResult = [[]];
 
@@ -16,10 +17,12 @@ describe('Database Repositories & Data Layer Test Suite (Member 2)', () => {
 
   before(() => {
     originalPoolQuery = pool.query;
+    originalGetConnection = pool.getConnection;
   });
 
   after(() => {
     pool.query = originalPoolQuery;
+    pool.getConnection = originalGetConnection;
   });
 
   beforeEach(() => {
@@ -373,6 +376,34 @@ describe('Database Repositories & Data Layer Test Suite (Member 2)', () => {
       assert.ok(cancelCall.query.includes("status = 'CANCELLED'"));
       assert.ok(cancelCall.query.includes('AND user_id = ?'));
       assert.deepEqual(cancelCall.params, [3, 4]);
+    });
+
+    test('approval locks the request and resource, checks overlap, then commits atomically', async () => {
+      const statements = [];
+      let committed = false;
+      pool.getConnection = async () => ({
+        beginTransaction: async () => statements.push('BEGIN'),
+        commit: async () => { committed = true; statements.push('COMMIT'); },
+        rollback: async () => statements.push('ROLLBACK'),
+        release: () => statements.push('RELEASE'),
+        query: async (query) => {
+          statements.push(query);
+          if (query.includes('FROM requests WHERE id = ? FOR UPDATE')) return [[{ id: 9, resource_id: 2, start_time: '2030-01-01 10:00:00', end_time: '2030-01-01 11:00:00', status: 'PENDING' }]];
+          if (query.includes('FROM resources WHERE id = ? FOR UPDATE')) return [[{ id: 2, status: 'AVAILABLE', is_active: 1 }]];
+          if (query.includes('SELECT id FROM requests')) return [[]];
+          if (query.includes('UPDATE requests SET status')) return [{ affectedRows: 1 }];
+          throw new Error(`Unexpected transaction query: ${query}`);
+        }
+      });
+      mockQueryResult = [[{ id: 9, status: 'APPROVED' }]];
+      const result = await requestRepository.approve(9, 1);
+      assert.equal(result.id, 9);
+      assert.equal(committed, true);
+      assert.ok(statements.some((query) => typeof query === 'string' && query.includes('FROM resources WHERE id = ? FOR UPDATE')));
+      assert.ok(statements.some((query) => typeof query === 'string' && query.includes("status = 'APPROVED'")));
+      assert.ok(statements.includes('COMMIT'));
+      assert.ok(statements.includes('RELEASE'));
+      pool.getConnection = originalGetConnection;
     });
   });
 

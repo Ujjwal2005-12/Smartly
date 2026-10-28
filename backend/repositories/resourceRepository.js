@@ -34,6 +34,11 @@ const resourceRepository = {
       params.push(filters.status);
     }
 
+    if (filters.minCapacity) {
+      query += ' AND capacity >= ?';
+      params.push(Number(filters.minCapacity));
+    }
+
     if (filters.search) {
       query += ' AND (name LIKE ? OR location LIKE ? OR description LIKE ?)';
       const term = `%${filters.search}%`;

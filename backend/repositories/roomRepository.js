@@ -22,7 +22,7 @@ const roomRepository = {
    */
   async findById(id) {
     const resource = await resourceRepository.findById(id);
-    if (!resource || resource.type !== 'ROOM') {
+    if (!resource || resource.type !== 'ROOM' || resource.is_active === 0 || resource.is_active === false) {
       return null;
     }
     return resource;
