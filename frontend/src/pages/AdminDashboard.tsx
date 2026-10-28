@@ -1,227 +1,264 @@
-﻿import React, { useState, useEffect } from 'react';
-import { DoorOpen, Building2, Clock, PieChart as PieChartIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { DoorOpen, Clock, AlertCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { dashboardService } from '../services/dashboard.service';
 import { bookingService } from '../services/booking.service';
+import { roomService } from '../services/room.service';
 import { Booking } from '../types';
-import { DEMO_BOOKINGS } from '../services/demoData';
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState({
-    totalRooms: 48,
-    totalBuildings: 5,
-    activeRequests: 23,
-    occupancyRate: '65%',
-    available: 27,
-    occupied: 17,
-    reserved: 4,
+    totalRooms: 0,
+    totalBuildings: 0,
+    activeRequests: 0,
+    occupancyRate: '0%',
+    available: 0,
+    occupied: 0,
+    maintenance: 0,
   });
 
-  const [recentRequests, setRecentRequests] = useState<Booking[]>(DEMO_BOOKINGS.slice(0, 4));
+  const [recentRequests, setRecentRequests] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadData = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const [dashData, allBookings] = await Promise.all([
-          dashboardService.getStats(),
-          bookingService.getAllBookings(),
+        const [dashData, allBookings, allRooms] = await Promise.all([
+          dashboardService.getStats().catch(() => null),
+          bookingService.getAllBookings().catch(() => []),
+          roomService.getAllRooms().catch(() => []),
         ]);
+
+        if (!isMounted) return;
 
         if (dashData) {
           const facilities = dashData.facilities || {};
           const summary = dashData.summary || {};
           const bookings = dashData.bookings || {};
 
-          const total = summary.totalFacilities || 48;
-          const occ = facilities.occupied || 17;
-          const avail = facilities.available || 27;
-          const res = facilities.maintenance || 4;
+          const total = summary.totalFacilities || allRooms.length;
+          const occ = facilities.occupied || allRooms.filter((r) => r.status === 'OCCUPIED').length;
+          const avail = facilities.available || allRooms.filter((r) => r.status === 'AVAILABLE').length;
+          const maint = facilities.maintenance || allRooms.filter((r) => r.status === 'MAINTENANCE').length;
 
-          const rate = total > 0 ? `${Math.round((occ / total) * 100)}%` : '65%';
+          const rate = total > 0 ? `${Math.round((occ / total) * 100)}%` : '0%';
 
           setStats({
             totalRooms: total,
-            totalBuildings: 5,
-            activeRequests: bookings.pending || 23,
+            totalBuildings: new Set(allRooms.map((r) => r.location).filter(Boolean)).size || 1,
+            activeRequests: bookings.pending ?? allBookings.filter((b) => b.status === 'PENDING').length,
             occupancyRate: rate,
             available: avail,
             occupied: occ,
-            reserved: res,
+            maintenance: maint,
           });
 
           if (dashData.recentActivity && dashData.recentActivity.length > 0) {
             setRecentRequests(
-              dashData.recentActivity.map((r: any, idx: number) => ({
+              dashData.recentActivity.map((r: any) => ({
                 id: r.id,
                 displayId: `REQ-2026-${String(r.id).padStart(3, '0')}`,
                 user_id: r.user_id,
                 user_name: r.user_name || 'Student',
                 resource_id: r.resource_id,
-                resource_name: r.resource_name || 'Room',
+                resource_name: r.resource_name || 'Facility',
                 start_time: r.start_time,
                 end_time: r.end_time,
                 purpose: r.purpose,
                 status: r.status,
               }))
             );
-          } else if (allBookings && allBookings.length > 0) {
-            setRecentRequests(allBookings.slice(0, 4));
+          } else {
+            setRecentRequests(allBookings.slice(0, 5));
           }
+        } else {
+          setRecentRequests(allBookings.slice(0, 5));
         }
-      } catch (err) {
-        console.warn('Using default admin stats:', err);
+      } catch (err: any) {
+        if (isMounted) setError(err.message || 'Failed to load administrator metrics');
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
 
     loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Pie chart data
   const chartData = [
     { name: 'Available', value: stats.available, color: '#20A875' },
     { name: 'Occupied', value: stats.occupied, color: '#E65363' },
-    { name: 'Reserved', value: stats.reserved, color: '#F4AD32' },
-  ];
+    { name: 'Maintenance', value: stats.maintenance, color: '#F4AD32' },
+  ].filter((item) => item.value > 0);
 
   const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '25 Sep 2026';
+    if (!dateStr) return '—';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const formatTime = (startStr?: string, endStr?: string) => {
+    if (!startStr) return '—';
+    try {
+      const s = new Date(startStr);
+      const e = new Date(endStr || startStr);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+        const sTime = s.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const eTime = e.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        return `${sTime} - ${eTime}`;
+      }
+    } catch {}
+    return '—';
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-[#17243B] tracking-tight">Administration</h1>
-        <p className="text-[13px] text-[#718096] mt-0.5">Manage campus resources and access control.</p>
+        <h1 className="text-2xl font-bold text-[#17243B] tracking-tight">System Administration</h1>
+        <p className="text-[13px] text-[#718096] mt-0.5">High-level campus resource metrics, utilization, and activity.</p>
       </div>
 
-      {/* 4 Stat Cards in a row */}
+      {error && (
+        <div className="p-3 rounded-lg bg-[#FEF7EC] border border-[#FCE1B6] text-[#E09214] text-xs flex items-center gap-2">
+          <AlertCircle size={16} className="flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Rooms"
-          value={stats.totalRooms}
+          title="Total Resources"
+          value={loading ? '...' : stats.totalRooms}
           icon={<DoorOpen size={20} />}
           iconBgColor="bg-[#EDF4FF]"
           iconTextColor="text-[#2166F3]"
         />
         <StatCard
-          title="Total Buildings"
-          value={stats.totalBuildings}
-          icon={<Building2 size={20} />}
+          title="Pending Requests"
+          value={loading ? '...' : stats.activeRequests}
+          icon={<Clock size={20} />}
+          iconBgColor="bg-[#FEF7EC]"
+          iconTextColor="text-[#E09214]"
+        />
+        <StatCard
+          title="Available Now"
+          value={loading ? '...' : stats.available}
+          icon={<DoorOpen size={20} />}
           iconBgColor="bg-[#EAF7F0]"
           iconTextColor="text-[#20A875]"
         />
         <StatCard
-          title="Active Requests"
-          value={stats.activeRequests}
-          icon={<Clock size={20} />}
-          iconBgColor="bg-[#FDEEF0]"
-          iconTextColor="text-[#E65363]"
-        />
-        <StatCard
           title="Occupancy Rate"
-          value={stats.occupancyRate}
-          icon={<PieChartIcon size={20} />}
-          iconBgColor="bg-[#FEF7EC]"
-          iconTextColor="text-[#F4AD32]"
+          value={loading ? '...' : stats.occupancyRate}
+          icon={<Clock size={20} />}
+          iconBgColor="bg-[#F3E8FF]"
+          iconTextColor="text-[#8B5CF6]"
         />
       </div>
 
-      {/* Two Column Section */}
+      {/* Main Grid: Chart & Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Recent Requests Table (7 of 12 cols = 58%) */}
-        <div className="lg:col-span-7 bg-white rounded-xl border border-[#E1E8F0] shadow-xs overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#E1E8F0]">
-            <h2 className="text-sm font-semibold text-[#17243B]">Recent Requests</h2>
-          </div>
+        {/* Resource Allocation Pie Chart */}
+        <div className="lg:col-span-5 bg-white rounded-xl border border-[#E1E8F0] p-5 shadow-xs">
+          <h2 className="text-sm font-semibold text-[#17243B] mb-1">Resource Status Breakdown</h2>
+          <p className="text-xs text-[#718096] mb-4">Real-time availability distribution</p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#E1E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#718096] uppercase tracking-wider">
-                  <th className="py-3 px-4">Request ID</th>
-                  <th className="py-3 px-4">Student</th>
-                  <th className="py-3 px-4">Room</th>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E1E8F0] text-[12px] text-[#17243B]">
-                {recentRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-[#F3F7FC] transition-colors">
-                    <td className="py-3.5 px-4 font-semibold text-[#17243B]">
-                      {req.displayId || `REQ-2026-${String(req.id).padStart(3, '0')}`}
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-[#17243B]">{req.user_name}</td>
-                    <td className="py-3.5 px-4 font-medium text-[#2166F3]">{req.resource_name}</td>
-                    <td className="py-3.5 px-4 text-[#718096]">{formatDate(req.start_time)}</td>
-                    <td className="py-3.5 px-4">
-                      <StatusBadge status={req.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right Column: Room Utilization Donut Chart (5 of 12 cols = 42%) */}
-        <div className="lg:col-span-5 bg-white rounded-xl border border-[#E1E8F0] shadow-xs p-5">
-          <div className="pb-3 border-b border-[#E1E8F0] mb-4">
-            <h2 className="text-sm font-semibold text-[#17243B]">Room Utilization</h2>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 py-2">
-            {/* Donut Chart with Centered Metric */}
-            <div className="relative w-44 h-44 flex-shrink-0 flex items-center justify-center">
+          <div className="h-60 w-full flex items-center justify-center">
+            {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={chartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={52}
-                    outerRadius={72}
-                    paddingAngle={3}
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={4}
                     dataKey="value"
                   >
                     {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-2xl font-extrabold text-[#17243B] leading-none">
-                  {stats.totalRooms}
-                </span>
-                <span className="text-[10px] text-[#718096] font-medium mt-0.5">Total Rooms</span>
-              </div>
-            </div>
+            ) : (
+              <p className="text-xs text-[#718096]">No resource data available</p>
+            )}
+          </div>
 
-            {/* Legend */}
-            <div className="space-y-2.5 text-xs">
-              <div className="flex items-center gap-2.5">
-                <span className="w-3 h-3 rounded-full bg-[#20A875] flex-shrink-0" />
-                <span className="text-[#718096]">Available:</span>
-                <span className="font-bold text-[#17243B]">{stats.available}</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className="w-3 h-3 rounded-full bg-[#E65363] flex-shrink-0" />
-                <span className="text-[#718096]">Occupied:</span>
-                <span className="font-bold text-[#17243B]">{stats.occupied}</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className="w-3 h-3 rounded-full bg-[#F4AD32] flex-shrink-0" />
-                <span className="text-[#718096]">Reserved:</span>
-                <span className="font-bold text-[#17243B]">{stats.reserved}</span>
-              </div>
+          <div className="flex items-center justify-around border-t border-[#E1E8F0] pt-4 mt-2">
+            <div className="text-center">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#20A875] mr-1.5" />
+              <span className="text-xs text-[#718096]">Available ({stats.available})</span>
             </div>
+            <div className="text-center">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#E65363] mr-1.5" />
+              <span className="text-xs text-[#718096]">Occupied ({stats.occupied})</span>
+            </div>
+            <div className="text-center">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#F4AD32] mr-1.5" />
+              <span className="text-xs text-[#718096]">Maintenance ({stats.maintenance})</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Activity Table */}
+        <div className="lg:col-span-7 bg-white rounded-xl border border-[#E1E8F0] shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-[#E1E8F0] flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#17243B]">Recent Access Requests</h2>
+            <span className="text-xs text-[#718096]">Latest Submissions</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#E1E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#718096] uppercase tracking-wider">
+                  <th className="py-2.5 px-4">Request ID</th>
+                  <th className="py-2.5 px-4">Requester</th>
+                  <th className="py-2.5 px-4">Resource</th>
+                  <th className="py-2.5 px-4">Date & Time</th>
+                  <th className="py-2.5 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E1E8F0] text-xs">
+                {recentRequests.map((req) => (
+                  <tr key={req.id} className="hover:bg-[#F3F7FC]">
+                    <td className="py-3 px-4 font-semibold text-[#17243B]">
+                      {req.displayId || `REQ-${req.id}`}
+                    </td>
+                    <td className="py-3 px-4 text-[#17243B] font-medium">{req.user_name || 'Student'}</td>
+                    <td className="py-3 px-4 text-[#2166F3] font-medium">{req.resource_name || 'Room'}</td>
+                    <td className="py-3 px-4 text-[#718096]">
+                      {formatDate(req.start_time)} ({formatTime(req.start_time, req.end_time)})
+                    </td>
+                    <td className="py-3 px-4">
+                      <StatusBadge status={req.status} />
+                    </td>
+                  </tr>
+                ))}
+                {recentRequests.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-6 text-xs text-[#718096]">
+                      No recent activity recorded.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

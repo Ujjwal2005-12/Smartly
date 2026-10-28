@@ -1,10 +1,13 @@
 {
   "name": "smartly-workspace",
   "private": true,
+  "description": "Smartly Access Flow Control Management System Workspace",
   "scripts": {
-    "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
+    "dev": "node scripts/dev.js",
     "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run dev"
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix backend test",
+    "test:backend": "npm --prefix backend test"
   }
 }

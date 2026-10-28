@@ -1,27 +1,34 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Check, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { bookingService } from '../services/booking.service';
 import { Booking } from '../types';
 import { Modal } from '../components/common/Modal';
-import { DEMO_BOOKINGS } from '../services/demoData';
 
 export const FacultyRequestsPage: React.FC = () => {
-  const [bookings, setBookings] = useState<Booking[]>(DEMO_BOOKINGS);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
   const [search, setSearch] = useState('');
   const [rejectModalBooking, setRejectModalBooking] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState('Room maintenance or scheduling conflict');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchBookings = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await bookingService.getAllBookings();
-      if (data && data.length > 0) {
-        setBookings(data);
-      }
-    } catch (err) {
-      console.warn('Using demo bookings for faculty:', err);
+      setBookings(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to retrieve booking requests');
+      setBookings([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,25 +43,33 @@ export const FacultyRequestsPage: React.FC = () => {
   };
 
   const handleApprove = async (id: number) => {
+    setActionLoading(true);
+    setErrorMessage(null);
+    setToastMessage(null);
     try {
       await bookingService.updateStatus(id, 'APPROVED');
       setBookings((prev) =>
         prev.map((b) => (b.id === id ? { ...b, status: 'APPROVED' } : b))
       );
       setToastMessage('Request approved successfully!');
-      setTimeout(() => setToastMessage(null), 2500);
-    } catch {
-      // Demo fallback
-      setBookings((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: 'APPROVED' } : b))
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err: any) {
+      setErrorMessage(
+        err.status === 409
+          ? 'Cannot approve: An overlapping approved reservation exists for this room during this window.'
+          : err.message || 'Failed to approve booking request'
       );
-      setToastMessage('Request approved (demonstration mode)');
-      setTimeout(() => setToastMessage(null), 2500);
+      setTimeout(() => setErrorMessage(null), 4000);
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleRejectConfirm = async () => {
     if (!rejectModalBooking) return;
+    setActionLoading(true);
+    setErrorMessage(null);
+    setToastMessage(null);
     try {
       await bookingService.updateStatus(rejectModalBooking.id, 'REJECTED', rejectionReason);
       setBookings((prev) =>
@@ -64,21 +79,14 @@ export const FacultyRequestsPage: React.FC = () => {
             : b
         )
       );
-      setToastMessage('Request rejected.');
-      setTimeout(() => setToastMessage(null), 2500);
-    } catch {
-      // Demo fallback
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === rejectModalBooking.id
-            ? { ...b, status: 'REJECTED', rejection_reason: rejectionReason }
-            : b
-        )
-      );
-      setToastMessage('Request rejected (demonstration mode)');
-      setTimeout(() => setToastMessage(null), 2500);
-    } finally {
+      setToastMessage('Request rejected successfully.');
+      setTimeout(() => setToastMessage(null), 3000);
       setRejectModalBooking(null);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to reject booking request');
+      setTimeout(() => setErrorMessage(null), 4000);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -93,14 +101,14 @@ export const FacultyRequestsPage: React.FC = () => {
   });
 
   const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '25 Sep 2026';
+    if (!dateStr) return '—';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   const formatTime = (startStr?: string, endStr?: string) => {
-    if (!startStr) return '11:00 - 12:00';
+    if (!startStr) return '—';
     try {
       const s = new Date(startStr);
       const e = new Date(endStr || startStr);
@@ -110,21 +118,35 @@ export const FacultyRequestsPage: React.FC = () => {
         return `${sTime} - ${eTime}`;
       }
     } catch {}
-    return '11:00 - 12:00';
+    return '—';
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-[#17243B] tracking-tight">Pending Requests</h1>
-        <p className="text-[13px] text-[#718096] mt-0.5">Review and approve resource requests.</p>
+        <h1 className="text-2xl font-bold text-[#17243B] tracking-tight">Facility Access Approvals</h1>
+        <p className="text-[13px] text-[#718096] mt-0.5">Review, approve, or reject student and faculty resource requests.</p>
       </div>
 
       {toastMessage && (
         <div className="p-3 rounded-lg bg-[#EAF7F0] border border-[#B7E7D1] text-[#20A875] text-xs flex items-center gap-2">
           <CheckCircle2 size={16} />
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="p-3 rounded-lg bg-[#FDEEF0] border border-[#F9C9CF] text-[#E65363] text-xs flex items-center gap-2">
+          <AlertCircle size={16} />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-lg bg-[#FEF7EC] border border-[#FCE1B6] text-[#E09214] text-xs flex items-center gap-2">
+          <AlertCircle size={16} />
+          <span>{error}</span>
         </div>
       )}
 
@@ -140,7 +162,7 @@ export const FacultyRequestsPage: React.FC = () => {
                 : 'bg-white border border-[#E1E8F0] text-[#718096] hover:text-[#17243B]'
             }`}
           >
-            Pending ({counts.pending || 4})
+            Pending ({counts.pending})
           </button>
           <button
             onClick={() => setActiveTab('APPROVED')}
@@ -150,7 +172,7 @@ export const FacultyRequestsPage: React.FC = () => {
                 : 'bg-white border border-[#E1E8F0] text-[#718096] hover:text-[#17243B]'
             }`}
           >
-            Approved ({counts.approved || 12})
+            Approved ({counts.approved})
           </button>
           <button
             onClick={() => setActiveTab('REJECTED')}
@@ -160,7 +182,7 @@ export const FacultyRequestsPage: React.FC = () => {
                 : 'bg-white border border-[#E1E8F0] text-[#718096] hover:text-[#17243B]'
             }`}
           >
-            Rejected ({counts.rejected || 6})
+            Rejected ({counts.rejected})
           </button>
         </div>
 
@@ -179,66 +201,76 @@ export const FacultyRequestsPage: React.FC = () => {
 
       {/* Approvals Table */}
       <div className="bg-white rounded-xl border border-[#E1E8F0] shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-[#E1E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#718096] uppercase tracking-wider">
-                <th className="py-3 px-4">Request ID</th>
-                <th className="py-3 px-4">Student</th>
-                <th className="py-3 px-4">Room</th>
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Time</th>
-                <th className="py-3 px-4">Purpose</th>
-                <th className="py-3 px-4 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E1E8F0] text-[12px] text-[#17243B]">
-              {filtered.map((req) => (
-                <tr key={req.id} className="hover:bg-[#F3F7FC] transition-colors">
-                  <td className="py-3.5 px-4 font-semibold text-[#17243B]">
-                    {req.displayId || `REQ-2026-${String(req.id).padStart(3, '0')}`}
-                  </td>
-                  <td className="py-3.5 px-4 font-medium text-[#17243B]">{req.user_name}</td>
-                  <td className="py-3.5 px-4 font-medium text-[#2166F3]">{req.resource_name}</td>
-                  <td className="py-3.5 px-4 text-[#718096]">{formatDate(req.start_time)}</td>
-                  <td className="py-3.5 px-4 text-[#718096]">{formatTime(req.start_time, req.end_time)}</td>
-                  <td className="py-3.5 px-4 text-[#17243B]">{req.purpose}</td>
-                  <td className="py-3.5 px-4 text-center">
-                    {req.status === 'PENDING' ? (
-                      <div className="flex items-center justify-center gap-2">
-                        {/* Green Approve Button */}
-                        <button
-                          onClick={() => handleApprove(req.id)}
-                          className="px-3 py-1 rounded-md bg-[#20A875] hover:bg-emerald-600 text-white font-medium text-[11px] transition-colors flex items-center gap-1 shadow-xs"
-                        >
-                          <Check size={12} />
-                          <span>Approve</span>
-                        </button>
-                        {/* Red Outlined Reject Button */}
-                        <button
-                          onClick={() => setRejectModalBooking(req)}
-                          className="px-3 py-1 rounded-md border border-[#E65363] text-[#E65363] hover:bg-[#FDEEF0] font-medium text-[11px] transition-colors flex items-center gap-1"
-                        >
-                          <X size={12} />
-                          <span>Reject</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <StatusBadge status={req.status} />
-                    )}
-                  </td>
+        {loading ? (
+          <div className="p-8 text-center text-xs text-[#718096]">Loading approval requests...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#E1E8F0] bg-[#F8FAFC] text-[11px] font-semibold text-[#718096] uppercase tracking-wider">
+                  <th className="py-3 px-4">Request ID</th>
+                  <th className="py-3 px-4">Requester</th>
+                  <th className="py-3 px-4">Facility</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Time Window</th>
+                  <th className="py-3 px-4">Purpose</th>
+                  <th className="py-3 px-4 text-center">Action / Status</th>
                 </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-[#718096] text-xs">
-                    No requests found matching current filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[#E1E8F0] text-[12px] text-[#17243B]">
+                {filtered.map((req) => (
+                  <tr key={req.id} className="hover:bg-[#F3F7FC] transition-colors">
+                    <td className="py-3.5 px-4 font-semibold text-[#17243B]">
+                      {req.displayId || `REQ-2026-${String(req.id).padStart(3, '0')}`}
+                    </td>
+                    <td className="py-3.5 px-4 font-medium text-[#17243B]">
+                      {req.user_name}
+                      {req.user_email && <span className="block text-[10px] text-[#718096]">{req.user_email}</span>}
+                    </td>
+                    <td className="py-3.5 px-4 font-medium text-[#2166F3]">
+                      {req.resource_name}
+                      {req.building && <span className="block text-[10px] text-[#718096]">{req.building}</span>}
+                    </td>
+                    <td className="py-3.5 px-4 text-[#718096]">{formatDate(req.start_time)}</td>
+                    <td className="py-3.5 px-4 text-[#718096]">{formatTime(req.start_time, req.end_time)}</td>
+                    <td className="py-3.5 px-4 text-[#17243B] max-w-xs truncate">{req.purpose}</td>
+                    <td className="py-3.5 px-4 text-center">
+                      {req.status === 'PENDING' ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleApprove(req.id)}
+                            disabled={actionLoading}
+                            className="px-3 py-1 rounded-md bg-[#20A875] hover:bg-emerald-600 text-white font-medium text-[11px] transition-colors flex items-center gap-1 shadow-xs disabled:opacity-60"
+                          >
+                            <Check size={12} />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            onClick={() => setRejectModalBooking(req)}
+                            disabled={actionLoading}
+                            className="px-3 py-1 rounded-md border border-[#E65363] text-[#E65363] hover:bg-[#FDEEF0] font-medium text-[11px] transition-colors flex items-center gap-1 disabled:opacity-60"
+                          >
+                            <X size={12} />
+                            <span>Reject</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <StatusBadge status={req.status} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-[#718096] text-xs">
+                      No requests found matching current filter ({activeTab.toLowerCase()}).
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Reject Modal */}
@@ -277,9 +309,10 @@ export const FacultyRequestsPage: React.FC = () => {
             </button>
             <button
               onClick={handleRejectConfirm}
-              className="px-3 py-1.5 rounded-lg bg-[#E65363] text-white font-semibold hover:bg-red-600"
+              disabled={actionLoading}
+              className="px-3 py-1.5 rounded-lg bg-[#E65363] text-white font-semibold hover:bg-red-600 disabled:opacity-60"
             >
-              Confirm Rejection
+              {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
             </button>
           </div>
         </div>

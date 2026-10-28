@@ -1,33 +1,43 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, UserPlus, LogIn, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('your@college.edu');
-  const [password, setPassword] = useState('••••••••••••');
+  const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+
+  // Login form state
+  const [email, setEmail] = useState('student@smartly.local');
+  const [password, setPassword] = useState('password123');
+
+  // Register form state
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { login, isBackendConnected, switchRole } = useAuth();
+
+  const { login, register, isBackendConnected } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     setLoading(true);
 
     try {
-      // If user kept the placeholder bullets, use default seed password
-      const actualPassword = password === '••••••••••••' ? 'password123' : password;
-      await login(email, actualPassword);
+      const loggedUser = await login(email.trim(), password);
 
-      // Route based on role
-      const lower = email.toLowerCase();
-      if (lower.includes('admin')) {
+      // Route based on actual verified role returned by the backend
+      if (loggedUser.role === 'ADMIN') {
         navigate('/admin');
-      } else if (lower.includes('faculty')) {
+      } else if (loggedUser.role === 'FACULTY') {
         navigate('/faculty/requests');
       } else {
         navigate('/dashboard');
@@ -39,17 +49,56 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickFill = (roleEmail: string, roleName: 'STUDENT' | 'FACULTY' | 'ADMIN') => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (regName.trim().length < 2) {
+      setError('Full name must be at least 2 characters long.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) {
+      setError('Please provide a valid institutional email address.');
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setError('Password confirmation does not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await register(regName.trim(), regEmail.trim(), regPassword);
+      setSuccess('Account created successfully! Redirecting to student dashboard...');
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Email may already be in use.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickFill = (roleEmail: string) => {
     setEmail(roleEmail);
     setPassword('password123');
-    switchRole(roleName);
+    setError(null);
   };
 
   return (
     <div className="min-h-screen w-full flex bg-[#F3F7FC]">
-      {/* Left Panel - Campus Hero (50% on desktop) */}
+      {/* Left Panel - Campus Hero */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-[#102448] overflow-hidden flex-col justify-between p-12 text-white">
-        {/* Background Image with Gradient Overlay */}
         <div
           className="absolute inset-0 bg-cover bg-center opacity-40 mix-blend-overlay"
           style={{
@@ -72,7 +121,7 @@ export const LoginPage: React.FC = () => {
             Access Flow Control Management System
           </h1>
           <p className="text-slate-200 text-base leading-relaxed mb-6 font-normal">
-            Manage classrooms, laboratories and campus resources efficiently.
+            Manage classrooms, laboratories, auditoriums, and campus facilities with real-time conflict avoidance.
           </p>
 
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-white">
@@ -90,11 +139,11 @@ export const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Panel - Sign In Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 bg-white">
+      {/* Right Panel - Sign In & Registration Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 bg-white overflow-y-auto">
         <div className="w-full max-w-md">
           {/* Mobile Smartly Brand */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
+          <div className="flex items-center gap-3 mb-6 lg:hidden">
             <div className="w-9 h-9 rounded-xl bg-[#2166F3] flex items-center justify-center font-bold text-lg text-white">
               S
             </div>
@@ -105,7 +154,7 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {/* Desktop Logo Header */}
-          <div className="hidden lg:flex items-center gap-3 mb-6">
+          <div className="hidden lg:flex items-center gap-3 mb-4">
             <div className="w-8 h-8 rounded-lg bg-[#2166F3] flex items-center justify-center font-bold text-base text-white">
               S
             </div>
@@ -115,26 +164,61 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-[#17243B] tracking-tight">Welcome Back</h2>
-            <p className="text-[13px] text-[#718096] mt-1">
-              Sign in to your institutional account.
+          {/* Form Header */}
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold text-[#17243B] tracking-tight">
+              {mode === 'LOGIN' ? 'Welcome Back' : 'Create Student Account'}
+            </h2>
+            <p className="text-[13px] text-[#718096] mt-0.5">
+              {mode === 'LOGIN'
+                ? 'Sign in to access campus facilities and schedules.'
+                : 'Register with your institutional credentials to request resources.'}
             </p>
+          </div>
+
+          {/* Tab Selector: Sign In vs Register */}
+          <div className="flex bg-[#F3F7FC] p-1 rounded-lg border border-[#E1E8F0] mb-4 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('LOGIN');
+                setError(null);
+                setSuccess(null);
+              }}
+              className={`flex-1 py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                mode === 'LOGIN' ? 'bg-white text-[#2166F3] shadow-xs' : 'text-[#718096] hover:text-[#17243B]'
+              }`}
+            >
+              <LogIn size={13} />
+              <span>Sign In</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('REGISTER');
+                setError(null);
+                setSuccess(null);
+              }}
+              className={`flex-1 py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                mode === 'REGISTER' ? 'bg-white text-[#2166F3] shadow-xs' : 'text-[#718096] hover:text-[#17243B]'
+              }`}
+            >
+              <UserPlus size={13} />
+              <span>Register Student</span>
+            </button>
           </div>
 
           {/* Backend Connectivity Notice */}
           <div className="mb-4">
             {isBackendConnected ? (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#EAF7F0] border border-[#B7E7D1] text-[11px] text-[#20A875]">
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-[#EAF7F0] border border-[#B7E7D1] text-[11px] text-[#20A875]">
                 <CheckCircle2 size={14} className="flex-shrink-0" />
-                <span>Connected to live backend at <strong>http://localhost:5000/api</strong></span>
+                <span>Backend reachable at <strong>http://localhost:5000/api</strong></span>
               </div>
             ) : (
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[#FEF7EC] border border-[#FCE1B6] text-[11px] text-[#E09214]">
-                <div className="flex items-center gap-1.5">
-                  <AlertCircle size={14} className="flex-shrink-0" />
-                  <span>Backend offline (Demo credentials active)</span>
-                </div>
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-[#FEF7EC] border border-[#FCE1B6] text-[11px] text-[#E09214]">
+                <AlertCircle size={14} className="flex-shrink-0" />
+                <span>Backend server offline or starting on port 5000</span>
               </div>
             )}
           </div>
@@ -147,129 +231,219 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Field */}
-            <div>
-              <label className="block text-[12px] font-semibold text-[#17243B] mb-1.5">
-                Institutional Email
-              </label>
-              <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]"
-                />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@college.edu"
-                  required
-                  className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-3.5 py-2.5 text-xs text-[#17243B] placeholder-[#718096] focus:outline-none focus:border-[#2166F3] focus:ring-1 focus:ring-[#2166F3] transition-all"
-                />
-              </div>
+          {/* Success Message */}
+          {success && (
+            <div className="mb-4 p-3 rounded-lg bg-[#EAF7F0] border border-[#B7E7D1] text-[#20A875] text-xs flex items-center gap-2">
+              <CheckCircle2 size={16} className="flex-shrink-0" />
+              <span>{success}</span>
             </div>
+          )}
 
-            {/* Password Field */}
-            <div>
-              <label className="block text-[12px] font-semibold text-[#17243B] mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]"
-                />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-10 py-2.5 text-xs text-[#17243B] placeholder-[#718096] focus:outline-none focus:border-[#2166F3] focus:ring-1 focus:ring-[#2166F3] transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#718096] hover:text-[#17243B]"
+          {/* Sign In Form */}
+          {mode === 'LOGIN' ? (
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1.5">
+                  Institutional Email
+                </label>
+                <div className="relative">
+                  <Mail
+                    size={16}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]"
+                  />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@smartly.local"
+                    required
+                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-3.5 py-2.5 text-xs text-[#17243B] placeholder-[#718096] focus:outline-none focus:border-[#2166F3] focus:ring-1 focus:ring-[#2166F3] transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    size={16}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]"
+                  />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    required
+                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-10 py-2.5 text-xs text-[#17243B] placeholder-[#718096] focus:outline-none focus:border-[#2166F3] focus:ring-1 focus:ring-[#2166F3] transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#718096] hover:text-[#17243B]"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-0.5">
+                <label className="flex items-center gap-2 cursor-pointer text-[#718096]">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-[#E1E8F0] text-[#2166F3] focus:ring-[#2166F3] h-3.5 w-3.5"
+                  />
+                  <span>Remember me</span>
+                </label>
+                <a
+                  href="#forgot"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    alert('For password resets, contact your campus systems administrator.');
+                  }}
+                  className="text-[#2166F3] hover:underline font-medium"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                  Forgot password?
+                </a>
               </div>
-            </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between text-xs pt-0.5">
-              <label className="flex items-center gap-2 cursor-pointer text-[#718096]">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-[#E1E8F0] text-[#2166F3] focus:ring-[#2166F3] h-3.5 w-3.5"
-                />
-                <span>Remember me</span>
-              </label>
-              <a
-                href="#forgot"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert('For password resets, contact your campus systems administrator.');
-                }}
-                className="text-[#2166F3] hover:underline font-medium"
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
               >
-                Forgot password?
-              </a>
-            </div>
+                {loading ? (
+                  <span>Authenticating...</span>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <ArrowRight size={14} />
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            /* Register Form */
+            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <UserIcon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]" />
+                  <input
+                    type="text"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    placeholder="Grace Hopper"
+                    required
+                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]"
+                  />
+                </div>
+              </div>
 
-            {/* Login Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span>Signing in...</span>
-              ) : (
-                <>
-                  <span>Login</span>
-                  <ArrowRight size={14} />
-                </>
-              )}
-            </button>
-          </form>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">
+                  Institutional Email
+                </label>
+                <div className="relative">
+                  <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]" />
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="student@smartly.local"
+                    required
+                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    required
+                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-10 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#718096] hover:text-[#17243B]"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#718096]" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    required
+                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2 mt-2"
+              >
+                {loading ? <span>Creating Account...</span> : <span>Register Student Account</span>}
+              </button>
+            </form>
+          )}
 
           {/* Quick Demo Credentials Fillers */}
-          <div className="mt-6 pt-5 border-t border-[#E1E8F0]">
+          <div className="mt-6 pt-4 border-t border-[#E1E8F0]">
             <p className="text-[11px] font-semibold text-[#718096] uppercase tracking-wider mb-2">
-              Quick Role Sign-In
+              Quick Fill Seed Accounts
             </p>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickFill('student@smartly.local', 'STUDENT')}
+                onClick={() => handleQuickFill('student@smartly.local')}
                 className="px-2.5 py-1.5 rounded-md border border-[#E1E8F0] bg-[#F8FAFC] hover:bg-[#EDF4FF] hover:border-[#2166F3] text-[11px] font-medium text-[#17243B] transition-colors text-center"
               >
                 Student
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickFill('faculty@smartly.local', 'FACULTY')}
+                onClick={() => handleQuickFill('faculty@smartly.local')}
                 className="px-2.5 py-1.5 rounded-md border border-[#E1E8F0] bg-[#F8FAFC] hover:bg-[#EDF4FF] hover:border-[#2166F3] text-[11px] font-medium text-[#17243B] transition-colors text-center"
               >
                 Faculty
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickFill('admin@smartly.local', 'ADMIN')}
+                onClick={() => handleQuickFill('admin@smartly.local')}
                 className="px-2.5 py-1.5 rounded-md border border-[#E1E8F0] bg-[#F8FAFC] hover:bg-[#EDF4FF] hover:border-[#2166F3] text-[11px] font-medium text-[#17243B] transition-colors text-center"
               >
                 Admin
               </button>
             </div>
-          </div>
-
-          <div className="mt-6 text-center">
-            <p className="text-[11px] text-[#718096]">
-              Use your institutional account to continue.
+            <p className="text-[10px] text-[#718096] text-center mt-2">
+              Default password for all seeded accounts: <code>password123</code>
             </p>
           </div>
         </div>

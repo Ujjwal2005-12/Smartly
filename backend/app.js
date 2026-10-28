@@ -8,6 +8,11 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
+// Determine allowed origins from environment or default local frontend origins
+const configuredOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
 // Core Middleware
 app.disable('x-powered-by');
 app.use((req, res, next) => {
