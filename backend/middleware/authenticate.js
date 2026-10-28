@@ -1,4 +1,5 @@
 const { verifyToken } = require('../utils/token');
+const userRepository = require('../repositories/userRepository');
 
 /**
  * Authentication middleware to verify JWT in the Authorization header.
@@ -6,7 +7,7 @@ const { verifyToken } = require('../utils/token');
  * Rejects missing, malformed, invalid, or expired tokens with HTTP 401.
  * Attaches verified identity strictly to req.user.
  */
-function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || typeof authHeader !== 'string') {
@@ -20,22 +21,28 @@ function authenticate(req, res, next) {
 
   const token = parts[1];
 
+  let decoded;
   try {
-    const decoded = verifyToken(token);
+    decoded = verifyToken(token);
+  } catch (error) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
 
-    if (!decoded || !decoded.id || !decoded.role) {
+  if (!decoded || !Number.isInteger(Number(decoded.id)) || Number(decoded.id) < 1) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+
+  try {
+    const user = await userRepository.findUserById(decoded.id);
+    if (!user || user.is_active === 0 || user.is_active === false) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Attach verified token claims; ignore any body/query parameters
-    req.user = {
-      id: decoded.id,
-      role: decoded.role
-    };
-
-    next();
+    // Resolve role and account status from the database, not stale token or client claims.
+    req.user = { id: user.id, role: user.role };
+    return next();
   } catch (error) {
-    return res.status(401).json({ message: 'Authentication required' });
+    return next(error);
   }
 }
 

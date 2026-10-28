@@ -1,8 +1,11 @@
-const { test, describe, before, after } = require('node:test');
+const { test, describe, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const app = require('../app');
 const { generateToken } = require('../utils/token');
+const userRepository = require('../repositories/userRepository');
+const PASSWORD_HASH = '$2b$10$K6V0zgHFIC8H4DQJWsIYx.Wd48O2fEsM//XecMvI09xW6q.sVbJNy';
+const originalUserMethods = { ...userRepository };
 
 let server;
 let baseUrl;
@@ -11,7 +14,42 @@ const adminToken = generateToken({ id: 1, role: 'ADMIN' });
 const studentToken = generateToken({ id: 3, role: 'STUDENT' });
 
 describe('User Registration, Password Change & Admin Management Test Suite', () => {
+  let users;
+  let resetMocks;
   before(async () => {
+    resetMocks = () => {
+      users = [
+        { id: 1, name: 'System Administrator', email: 'admin@smartly.local', role: 'ADMIN', is_active: 1, password_hash: PASSWORD_HASH },
+        { id: 2, name: 'Prof. Alan Turing', email: 'faculty@smartly.local', role: 'FACULTY', is_active: 1, password_hash: PASSWORD_HASH },
+        { id: 3, name: 'Grace Hopper', email: 'student@smartly.local', role: 'STUDENT', is_active: 1, password_hash: PASSWORD_HASH },
+        { id: 4, name: 'Ada Lovelace', email: 'student2@smartly.local', role: 'STUDENT', is_active: 1, password_hash: PASSWORD_HASH }
+      ];
+      userRepository.findUserByEmail = async (email) => users.find((user) => user.email === email) || null;
+      userRepository.findUserById = async (id) => {
+        const user = users.find((item) => item.id === Number(id));
+        if (!user) return null;
+        const { password_hash, ...safeUser } = user;
+        return { ...safeUser };
+      };
+      userRepository.findUserWithPasswordById = async (id) => users.find((user) => user.id === Number(id)) || null;
+      userRepository.create = async (data) => {
+        const user = { id: Math.max(...users.map((item) => item.id)) + 1, ...data, password_hash: data.passwordHash };
+        users.push(user);
+        return { id: user.id, name: user.name, email: user.email, role: user.role, is_active: user.isActive };
+      };
+      userRepository.updatePassword = async (id, hash) => { const user = users.find((item) => item.id === Number(id)); if (user) user.password_hash = hash; return Boolean(user); };
+      userRepository.findAll = async () => users.map(({ password_hash, ...user }) => ({ ...user }));
+      userRepository.update = async (id, data) => {
+        const user = users.find((item) => item.id === Number(id));
+        if (!user) return null;
+        Object.assign(user, data);
+        const { password_hash, ...safeUser } = user;
+        return { ...safeUser };
+      };
+      userRepository.softDelete = async (id) => { const user = users.find((item) => item.id === Number(id)); if (user) user.is_active = 0; return Boolean(user); };
+      userRepository.countActiveAdmins = async () => users.filter((user) => user.role === 'ADMIN' && user.is_active).length;
+    };
+    resetMocks();
     server = http.createServer(app);
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
@@ -19,10 +57,11 @@ describe('User Registration, Password Change & Admin Management Test Suite', () 
   });
 
   after(async () => {
-    const pool = require('../config/db');
     await new Promise((resolve) => server.close(resolve));
-    await pool.end();
+    Object.assign(userRepository, originalUserMethods);
   });
+
+  beforeEach(() => resetMocks());
 
   // 1. User Registration Tests
   test('1. POST /api/auth/register validates required fields and password length', async () => {

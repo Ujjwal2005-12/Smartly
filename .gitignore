@@ -1,9 +1,18 @@
-﻿node_modules/
+﻿
+# Dependencies
+node_modules/
 **/node_modules/
+
+# Environment variables and secrets
 .env
 .env.*
 !.env.example
+
+# Build and test output
 dist/
 coverage/
 *.log
 .DS_Store
+
+# Local database backups
+backend/*_backup*.sql

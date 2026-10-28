@@ -1,5 +1,9 @@
 const bookingRepository = require('../repositories/bookingRepository');
 const roomRepository = require('../repositories/roomRepository');
+const positiveInteger = (value) => /^\d+$/.test(String(value)) && Number(value) > 0;
+const validPagination = (limit, offset) =>
+  (limit === undefined || (/^\d+$/.test(String(limit)) && Number(limit) >= 1 && Number(limit) <= 100)) &&
+  (offset === undefined || (/^\d+$/.test(String(offset)) && Number(offset) >= 0));
 
 /**
  * Controller handling room reservation and access request endpoints.
@@ -12,15 +16,18 @@ const bookingController = {
   async getAllBookings(req, res, next) {
     try {
       const { status, roomId, limit, offset } = req.query;
+      if (status !== undefined && (typeof status !== 'string' || !['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(status.toUpperCase()))) return res.status(400).json({ message: 'Invalid booking status' });
+      if (roomId !== undefined && !positiveInteger(roomId)) return res.status(400).json({ message: 'roomId must be a positive integer' });
+      if (!validPagination(limit, offset)) return res.status(400).json({ message: 'limit must be 1-100 and offset must be a non-negative integer' });
       const user = req.user;
 
       let bookings;
       if (user.role === 'STUDENT') {
         // Students can only see their own bookings
-        bookings = await bookingRepository.findByUserId(user.id, { status, limit, offset });
+        bookings = await bookingRepository.findByUserId(user.id, { status: status?.toUpperCase(), limit: limit || (offset !== undefined ? 50 : undefined), offset });
       } else {
         // Admin and Faculty can view all bookings across campus
-        bookings = await bookingRepository.findAll({ status, resourceId: roomId, limit, offset });
+        bookings = await bookingRepository.findAll({ status: status?.toUpperCase(), resource_id: roomId, limit: limit || (offset !== undefined ? 50 : undefined), offset });
       }
 
       return res.status(200).json({ bookings });
@@ -49,6 +56,7 @@ const bookingController = {
   async getBookingById(req, res, next) {
     try {
       const { id } = req.params;
+      if (!positiveInteger(id)) return res.status(400).json({ message: 'Invalid booking id' });
       const booking = await bookingRepository.findById(id);
 
       if (!booking) {
@@ -75,7 +83,7 @@ const bookingController = {
       const { roomId, startTime, endTime, purpose } = req.body;
 
       // 1. Input validation
-      if (!roomId || !startTime || !endTime || !purpose) {
+      if (!positiveInteger(roomId) || typeof startTime !== 'string' || typeof endTime !== 'string' || !startTime || !endTime || typeof purpose !== 'string' || !purpose.trim()) {
         return res.status(400).json({
           message: 'roomId, startTime, endTime, and purpose are required'
         });
@@ -91,6 +99,7 @@ const bookingController = {
       if (end <= start) {
         return res.status(400).json({ message: 'endTime must be strictly greater than startTime' });
       }
+      if (start <= new Date()) return res.status(400).json({ message: 'Bookings must start in the future' });
 
       // 2. Validate room exists
       const room = await roomRepository.findById(roomId);
@@ -135,32 +144,29 @@ const bookingController = {
   async updateStatus(req, res, next) {
     try {
       const { id } = req.params;
+      if (!positiveInteger(id)) return res.status(400).json({ message: 'Invalid booking id' });
       const { status, rejection_reason } = req.body;
 
-      if (!['APPROVED', 'REJECTED', 'CANCELLED'].includes(status)) {
+      if (!['APPROVED', 'REJECTED'].includes(status)) {
         return res.status(400).json({
-          message: 'Invalid status. Permitted values: APPROVED, REJECTED, CANCELLED'
+          message: 'Invalid status. Permitted values: APPROVED, REJECTED'
         });
+      }
+      if (status === 'REJECTED' && rejection_reason !== undefined && (typeof rejection_reason !== 'string' || rejection_reason.length > 255)) {
+        return res.status(400).json({ message: 'rejection_reason must be a string of at most 255 characters' });
       }
 
       const booking = await bookingRepository.findById(id);
       if (!booking) {
         return res.status(404).json({ message: 'Booking not found' });
       }
+      if (booking.status !== 'PENDING') return res.status(409).json({ message: 'Only pending bookings can be reviewed' });
 
       // If approving, re-check conflict in case another booking was approved in the interim
       if (status === 'APPROVED') {
-        const hasConflict = await bookingRepository.hasConflict(
-          booking.resource_id,
-          booking.start_time,
-          booking.end_time,
-          booking.id
-        );
-        if (hasConflict) {
-          return res.status(409).json({
-            message: 'Cannot approve: An overlapping approved reservation exists for this room'
-          });
-        }
+        const updated = await bookingRepository.approve(id, req.user.id);
+        if (!updated) return res.status(404).json({ message: 'Booking not found' });
+        return res.status(200).json({ message: 'Booking has been approved', booking: updated });
       }
 
       const updated = await bookingRepository.updateStatus(id, {
@@ -168,6 +174,7 @@ const bookingController = {
         reviewed_by: req.user.id,
         rejection_reason: status === 'REJECTED' ? rejection_reason : null
       });
+      if (!updated) return res.status(409).json({ message: 'Only pending bookings can be reviewed' });
 
       return res.status(200).json({
         message: `Booking has been ${status.toLowerCase()}`,
@@ -185,6 +192,7 @@ const bookingController = {
   async cancelBooking(req, res, next) {
     try {
       const { id } = req.params;
+      if (!positiveInteger(id)) return res.status(400).json({ message: 'Invalid booking id' });
       const booking = await bookingRepository.findById(id);
 
       if (!booking) {
@@ -200,6 +208,7 @@ const bookingController = {
       }
 
       const cancelled = await bookingRepository.cancel(id, isStaff ? null : req.user.id);
+      if (!cancelled) return res.status(409).json({ message: 'Booking cannot be cancelled in its current status' });
       return res.status(200).json({
         message: 'Booking cancelled successfully',
         booking: cancelled

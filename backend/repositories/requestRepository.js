@@ -102,12 +102,15 @@ const requestRepository = {
         req.purpose,
         req.status,
         req.reviewed_by,
+        rev.name AS reviewer_name,
+        rev.email AS reviewer_email,
         req.reviewed_at,
         req.rejection_reason,
         req.created_at,
         req.updated_at
       FROM requests req
       INNER JOIN resources r ON req.resource_id = r.id
+      LEFT JOIN users rev ON req.reviewed_by = rev.id
       WHERE req.user_id = ?
     `;
     const params = [userId];
@@ -151,20 +154,25 @@ const requestRepository = {
         req.user_id,
         u.name AS user_name,
         u.email AS user_email,
+        u.role AS user_role,
         req.resource_id,
         r.name AS resource_name,
         r.type AS resource_type,
+        r.location AS resource_location,
         req.start_time,
         req.end_time,
         req.purpose,
         req.status,
         req.reviewed_by,
+        rev.name AS reviewer_name,
+        rev.email AS reviewer_email,
         req.reviewed_at,
         req.rejection_reason,
         req.created_at
       FROM requests req
       INNER JOIN users u ON req.user_id = u.id
       INNER JOIN resources r ON req.resource_id = r.id
+      LEFT JOIN users rev ON req.reviewed_by = rev.id
       WHERE 1=1
     `;
     const params = [];
@@ -174,9 +182,10 @@ const requestRepository = {
       params.push(filters.status);
     }
 
-    if (filters.resource_id) {
+    const resourceId = filters.resource_id ?? filters.resourceId;
+    if (resourceId) {
       query += ' AND req.resource_id = ?';
-      params.push(filters.resource_id);
+      params.push(resourceId);
     }
 
     if (filters.user_id) {
@@ -276,7 +285,7 @@ const requestRepository = {
             reviewed_by = ?,
             reviewed_at = NOW(),
             rejection_reason = ?
-        WHERE id = ?
+        WHERE id = ? AND status = 'PENDING'
       `;
       params = [status, reviewed_by, status === 'REJECTED' ? rejection_reason : null, id];
     } else {
@@ -284,7 +293,7 @@ const requestRepository = {
         UPDATE requests
         SET status = ?,
             rejection_reason = ?
-        WHERE id = ?
+        WHERE id = ? AND status = 'PENDING'
       `;
       params = [status, rejection_reason, id];
     }
@@ -295,6 +304,76 @@ const requestRepository = {
     }
 
     return this.findById(id);
+  },
+
+  /** Approve under a resource row lock so simultaneous approvals serialize. */
+  async approve(id, reviewed_by) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [requestRows] = await connection.query(
+        'SELECT id, resource_id, start_time, end_time, status FROM requests WHERE id = ? FOR UPDATE', [id]
+      );
+      if (!requestRows.length) {
+        await connection.rollback();
+        return null;
+      }
+      const request = requestRows[0];
+      if (request.status !== 'PENDING') {
+        const error = new Error('Only pending requests can be reviewed');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [resourceRows] = await connection.query(
+        'SELECT id, status, is_active FROM resources WHERE id = ? FOR UPDATE', [request.resource_id]
+      );
+      if (!resourceRows.length) {
+        const error = new Error('Resource no longer exists');
+        error.statusCode = 409;
+        throw error;
+      }
+      if (resourceRows[0].status !== 'AVAILABLE' || !resourceRows[0].is_active) {
+        const error = new Error('Resource is not currently available for approval');
+        error.statusCode = 409;
+        throw error;
+      }
+      if (new Date(request.start_time).getTime() <= Date.now()) {
+        const error = new Error('Past bookings cannot be approved');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [conflicts] = await connection.query(
+        `SELECT id FROM requests
+         WHERE resource_id = ? AND status = 'APPROVED'
+           AND start_time < ? AND end_time > ? AND id <> ?
+         LIMIT 1`,
+        [request.resource_id, request.end_time, request.start_time, id]
+      );
+      if (conflicts.length) {
+        const error = new Error('An overlapping approved reservation exists for this resource');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [result] = await connection.query(
+        `UPDATE requests SET status = 'APPROVED', reviewed_by = ?, reviewed_at = NOW(), rejection_reason = NULL
+         WHERE id = ? AND status = 'PENDING'`, [reviewed_by, id]
+      );
+      if (!result.affectedRows) {
+        const error = new Error('Request is no longer pending');
+        error.statusCode = 409;
+        throw error;
+      }
+      await connection.commit();
+      return this.findById(id);
+    } catch (error) {
+      try { await connection.rollback(); } catch (_) { /* preserve original error */ }
+      throw error;
+    } finally {
+      connection.release();
+    }
   },
 
   /**

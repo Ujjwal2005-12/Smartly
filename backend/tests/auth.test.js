@@ -4,6 +4,7 @@ const http = require('node:http');
 const jwt = require('jsonwebtoken');
 const app = require('../app');
 const userRepository = require('../repositories/userRepository');
+const pool = require('../config/db');
 const { generateToken } = require('../utils/token');
 
 // Ensure JWT_SECRET is present for testing
@@ -47,6 +48,7 @@ const mockInactiveUser = {
 // Store original repository methods to restore after tests
 const originalFindByEmail = userRepository.findUserByEmail;
 const originalFindById = userRepository.findUserById;
+const originalPoolQuery = pool.query;
 
 describe('Authentication & Authorization Test Suite (Member 1)', () => {
   before(async () => {
@@ -61,11 +63,14 @@ describe('Authentication & Authorization Test Suite (Member 1)', () => {
     // Restore repository methods
     userRepository.findUserByEmail = originalFindByEmail;
     userRepository.findUserById = originalFindById;
+    pool.query = originalPoolQuery;
 
     await new Promise((resolve) => server.close(resolve));
+    await pool.end();
   });
 
   beforeEach(() => {
+    pool.query = async () => [[{ health: 1 }]];
     // Default mock implementation
     userRepository.findUserByEmail = async (email) => {
       if (email === mockStudent.email) return { ...mockStudent };
@@ -112,7 +117,15 @@ describe('Authentication & Authorization Test Suite (Member 1)', () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.status, 'ok');
+    assert.equal(body.database, 'ok');
     assert.ok(body.timestamp);
+  });
+
+  test('Health endpoint reports 503 when the database check fails', async () => {
+    pool.query = async () => { throw new Error('database unavailable'); };
+    const res = await fetch(`${baseUrl}/api/health`);
+    assert.equal(res.status, 503);
+    assert.deepEqual(await res.json().then(({ status, database }) => ({ status, database })), { status: 'degraded', database: 'unavailable' });
   });
 
   // 2. Valid login returns 200, JWT, and safe user
@@ -286,6 +299,14 @@ describe('Authentication & Authorization Test Suite (Member 1)', () => {
     assert.equal(res.status, 403);
     const body = await res.json();
     assert.equal(body.message, 'Insufficient permissions');
+  });
+
+  test('A stale ADMIN token cannot retain privileges after the database role changes', async () => {
+    const staleAdminToken = generateToken({ id: mockStudent.id, role: 'ADMIN' });
+    const res = await fetch(`${baseUrl}/api/auth/admin-only`, {
+      headers: { Authorization: `Bearer ${staleAdminToken}` }
+    });
+    assert.equal(res.status, 403);
   });
 
   // 13. An ADMIN token can access the ADMIN-only test route

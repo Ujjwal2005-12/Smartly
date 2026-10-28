@@ -180,6 +180,8 @@ JWT_EXPIRES_IN=1h
 
 ## 5. Database Setup Instructions
 
+> **Existing database safety:** Treat an already populated Smartly database as authoritative. Do not rerun the schema or seed scripts against it as routine setup. The schema script may replace compatibility view definitions, and the seed script updates rows with fixed IDs. Use these scripts only when provisioning a new, isolated development database after review and backup.
+
 ### Step 1: Initialize Database & Schema
 Run the SQL schema using MySQL CLI from the repository root:
 ```bash
