@@ -1,6 +1,14 @@
-﻿// Centralized API Client matching Smartly Backend Contracts
+// Centralized API Client matching Smartly Backend Contracts
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const RAW_API_URL =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  'http://localhost:5000/api';
+
+// Normalize trailing slash if present
+const API_BASE_URL = RAW_API_URL.endsWith('/')
+  ? RAW_API_URL.slice(0, -1)
+  : RAW_API_URL;
 
 export class ApiError extends Error {
   status: number;
@@ -14,7 +22,7 @@ export class ApiError extends Error {
   }
 }
 
-function getToken(): string | null {
+export function getToken(): string | null {
   return localStorage.getItem('smartly_token');
 }
 
@@ -26,9 +34,13 @@ export function removeToken(): void {
   localStorage.removeItem('smartly_token');
 }
 
+export interface RequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
 export async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -40,32 +52,52 @@ export async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  // Ensure relative endpoints begin with /
+  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${formattedEndpoint}`;
+
+  // Configure request timeout using AbortController
+  const timeoutMs = options.timeoutMs ?? 15000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {
       ...options,
       headers,
+      signal: options.signal || controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     const contentType = res.headers.get('content-type');
     const isJson = contentType && contentType.includes('application/json');
     const data = isJson ? await res.json() : await res.text();
 
     if (!res.ok) {
-      const errorMessage =
-        (data && typeof data === 'object' && data.message) ||
-        `Request failed with status ${res.status}`;
+      let errorMessage = `Request failed with status ${res.status}`;
+      if (data && typeof data === 'object') {
+        errorMessage = data.message || data.error || errorMessage;
+      } else if (typeof data === 'string' && data.trim()) {
+        errorMessage = data;
+      }
       throw new ApiError(errorMessage, res.status, data);
     }
 
     return data as T;
   } catch (err: any) {
+    clearTimeout(timeoutId);
+
     if (err instanceof ApiError) {
       throw err;
     }
+
+    if (err.name === 'AbortError') {
+      throw new ApiError('Request timed out while waiting for server response', 408);
+    }
+
     throw new ApiError(
-      err.message || 'Network error or backend unreachable',
+      err.message || 'Network error: Backend server is unreachable',
       0,
       { originalError: err }
     );
@@ -73,26 +105,34 @@ export async function request<T>(
 }
 
 export const api = {
-  get: <T>(endpoint: string, options?: RequestInit) =>
-    request<T>(endpoint, { credentials: 'omit', method: 'GET', ...options }),
-  post: <T>(endpoint: string, body?: any, options?: RequestInit) =>
-    request<T>(endpoint, {
-      credentials: 'omit',
-      method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
-      ...options,
-    }),
-  put: <T>(endpoint: string, body?: any, options?: RequestInit) =>
-    request<T>(endpoint, {
-      credentials: 'omit',
-      method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
-      ...options,
-    }),
-  delete: <T>(endpoint: string, options?: RequestInit) =>
-    request<T>(endpoint, { credentials: 'omit', method: 'DELETE', ...options }),
+  get: <T>(endpoint: string, options?: RequestOptions) =>
+    request<T>(endpoint, { method: 'GET', ...options }),
 
-  // Health check helper
+  post: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
+      method: 'POST',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...options,
+    }),
+
+  put: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
+      method: 'PUT',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...options,
+    }),
+
+  patch: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
+      method: 'PATCH',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...options,
+    }),
+
+  delete: <T>(endpoint: string, options?: RequestOptions) =>
+    request<T>(endpoint, { method: 'DELETE', ...options }),
+
+  // Health check helper to verify backend availability
   async checkHealth(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE_URL}/health`, { method: 'GET' });
@@ -104,5 +144,5 @@ export const api = {
 
   getBaseUrl(): string {
     return API_BASE_URL;
-  }
+  },
 };
