@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 export const Sidebar: React.FC = () => {
-  const { role, isBackendConnected, switchRole } = useAuth();
+  const { role, isBackendConnected } = useAuth();
   const navigate = useNavigate();
 
   // Navigation configurations based on user role
@@ -93,15 +93,7 @@ export const Sidebar: React.FC = () => {
         <select
           onChange={(e) => {
             const val = e.target.value;
-            if (val.startsWith('ROLE_')) {
-              const r = val.replace('ROLE_', '') as any;
-              switchRole(r);
-              if (r === 'STUDENT') navigate('/dashboard');
-              else if (r === 'FACULTY') navigate('/faculty/requests');
-              else if (r === 'ADMIN') navigate('/admin');
-            } else {
-              navigate(val);
-            }
+            if (val) navigate(val);
           }}
           className="w-full text-[11px] bg-white border border-[#E1E8F0] rounded-md px-2 py-1 text-[#17243B] font-medium focus:outline-none focus:border-[#2166F3]"
         >

@@ -2,6 +2,10 @@ import { api } from './api';
 import { User } from '../types';
 
 export const userService = {
+  async createUser(data: { name: string; email: string; password: string; role: string }): Promise<{ message: string; user: User }> {
+    return api.post('/users', data);
+  },
+
   async getAllUsers(params?: { search?: string; role?: string; isActive?: boolean }): Promise<User[]> {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);

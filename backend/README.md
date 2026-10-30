@@ -48,6 +48,10 @@ The server will start on `http://localhost:${PORT||5000}`. The API health check 
 
 All protected routes require an `Authorization: Bearer <jwt>` header.
 
+Public registration at `POST /api/auth/register` always creates a `STUDENT` account; any role supplied by the client is ignored. An administrator can provision student, faculty, or admin accounts from **Manage Users** or `POST /api/users` with `{ "name", "email", "password", "role" }`. This endpoint requires an active `ADMIN` session. The first administrator is created through the one-time setup flow below (or through a trusted database setup process).
+
+For a new database with no administrator, set a long random `ADMIN_BOOTSTRAP_TOKEN` in `backend/.env`, restart the backend, then use **First Admin** on the login page. The setup endpoint accepts that token once and refuses to create another admin after one exists. Keep the token private; remove it from the environment after setup.
+
 
 ### Complete route behavior
 
@@ -60,7 +64,7 @@ All protected routes require an `Authorization: Bearer <jwt>` header.
 
 For a new, isolated development database only, see `docs/DATABASE_SETUP.md`. Never run the seed script against shared data: it updates fixed IDs.
 
-`CORS_ORIGIN` accepts a comma-separated list of allowed browser origins. It defaults to `http://localhost:5173` for Vite development.
+`CORS_ORIGIN` accepts a comma-separated list of allowed browser origins. By default, local origins on ports `3000` and `5173` are allowed.
 
 ## Testing
 Run the Node.js built-in test suite:

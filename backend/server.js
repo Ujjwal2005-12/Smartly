@@ -17,14 +17,6 @@ const server = app.listen(PORT, HOST, () => {
     .catch((err) => {
       console.warn('[Database Notice]: Database not yet reachable or schema not initialized:', err.code || err.message);
     });
-const server = app.listen(PORT, async () => {
-  console.log(`Smartly Backend running on port ${PORT}`);
-  try {
-    await pool.query('SELECT 1');
-    console.log('Database connected successfully.');
-  } catch (err) {
-    console.warn('[Database Notice]: Database is unavailable:', err.code || err.name);
-  }
 });
 
 module.exports = server;

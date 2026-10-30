@@ -4,6 +4,7 @@ const http = require('node:http');
 const app = require('../app');
 const { generateToken } = require('../utils/token');
 const userRepository = require('../repositories/userRepository');
+const pool = require('../config/db');
 const PASSWORD_HASH = '$2b$10$K6V0zgHFIC8H4DQJWsIYx.Wd48O2fEsM//XecMvI09xW6q.sVbJNy';
 const originalUserMethods = { ...userRepository };
 
@@ -83,7 +84,8 @@ describe('User Registration, Password Change & Admin Management Test Suite', () 
       body: JSON.stringify({
         name: 'John von Neumann',
         email: uniqueEmail,
-        password: 'password123'
+        password: 'password123',
+        role: 'ADMIN'
       })
     });
 
@@ -94,6 +96,71 @@ describe('User Registration, Password Change & Admin Management Test Suite', () 
     assert.equal(data.user.role, 'STUDENT');
     assert.equal(data.user.email, uniqueEmail);
     assert.equal(data.user.password_hash, undefined);
+  });
+
+  test('Only an administrator can create accounts with assigned roles', async () => {
+    const denied = await fetch(`${baseUrl}/api/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${studentToken}` },
+      body: JSON.stringify({ name: 'Faculty Member', email: 'newfaculty@smartly.local', password: 'initial123', role: 'FACULTY' })
+    });
+    assert.equal(denied.status, 403);
+
+    const created = await fetch(`${baseUrl}/api/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ name: 'Faculty Member', email: 'newfaculty@smartly.local', password: 'initial123', role: 'FACULTY' })
+    });
+    assert.equal(created.status, 201);
+    const data = await created.json();
+    assert.equal(data.user.role, 'FACULTY');
+    assert.equal(data.user.password_hash, undefined);
+  });
+
+  test('First admin setup requires the setup token and becomes unavailable after creation', async () => {
+    const originalToken = process.env.ADMIN_BOOTSTRAP_TOKEN;
+    const originalGetConnection = pool.getConnection;
+    process.env.ADMIN_BOOTSTRAP_TOKEN = 'test-only-bootstrap-token';
+    users = users.filter((user) => user.role !== 'ADMIN');
+    pool.getConnection = async () => ({
+      query: async (sql) => {
+        if (sql.includes('GET_LOCK')) return [[{ acquired: 1 }]];
+        if (sql.includes('RELEASE_LOCK')) return [[{ released: 1 }]];
+        if (sql.includes("WHERE role = 'ADMIN'")) return [users.filter((user) => user.role === 'ADMIN').map(({ id }) => ({ id }))];
+        throw new Error(`Unexpected bootstrap query: ${sql}`);
+      },
+      release() {}
+    });
+
+    try {
+      const wrongToken = await fetch(`${baseUrl}/api/auth/register-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'First Administrator', email: 'firstadmin@smartly.local', password: 'strong-admin-password', bootstrapToken: 'incorrect-token' })
+      });
+      assert.equal(wrongToken.status, 401);
+
+      const created = await fetch(`${baseUrl}/api/auth/register-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'First Administrator', email: 'firstadmin@smartly.local', password: 'strong-admin-password', bootstrapToken: 'test-only-bootstrap-token' })
+      });
+      assert.equal(created.status, 201);
+      const data = await created.json();
+      assert.equal(data.user.role, 'ADMIN');
+      assert.ok(data.token);
+
+      const secondAttempt = await fetch(`${baseUrl}/api/auth/register-admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Second Administrator', email: 'secondadmin@smartly.local', password: 'strong-admin-password', bootstrapToken: 'test-only-bootstrap-token' })
+      });
+      assert.equal(secondAttempt.status, 409);
+    } finally {
+      pool.getConnection = originalGetConnection;
+      if (originalToken === undefined) delete process.env.ADMIN_BOOTSTRAP_TOKEN;
+      else process.env.ADMIN_BOOTSTRAP_TOKEN = originalToken;
+    }
   });
 
   test('3. POST /api/auth/register rejects duplicate email with 409 Conflict', async () => {

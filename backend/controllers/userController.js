@@ -1,4 +1,7 @@
 const userRepository = require('../repositories/userRepository');
+const bcrypt = require('bcryptjs');
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USER_ROLES = ['ADMIN', 'FACULTY', 'STUDENT'];
 const validId = (value) => /^\d+$/.test(String(value)) && Number(value) > 0;
 const validPage = (limit, offset) =>
   (limit === undefined || (/^\d+$/.test(String(limit)) && Number(limit) >= 1 && Number(limit) <= 100)) &&
@@ -8,6 +11,45 @@ const validPage = (limit, offset) =>
  * Controller handling user administration operations (Admin only).
  */
 const userController = {
+  /**
+   * POST /api/users
+   * Creates an account with a role assigned by an administrator.
+   */
+  async createUser(req, res, next) {
+    try {
+      const { name, email, password, role } = req.body;
+      if (typeof name !== 'string' || name.trim().length < 2) {
+        return res.status(400).json({ message: 'Name must be at least 2 characters long' });
+      }
+      if (typeof email !== 'string' || !EMAIL_REGEX.test(email.trim())) {
+        return res.status(400).json({ message: 'A valid email is required' });
+      }
+      if (typeof password !== 'string' || password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+      }
+      if (typeof role !== 'string' || !USER_ROLES.includes(role.toUpperCase())) {
+        return res.status(400).json({ message: 'Role must be STUDENT, FACULTY, or ADMIN' });
+      }
+
+      const normalizedEmail = email.trim();
+      if (await userRepository.findUserByEmail(normalizedEmail)) {
+        return res.status(409).json({ message: 'Email is already registered' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await userRepository.create({
+        name: name.trim(),
+        email: normalizedEmail,
+        passwordHash,
+        role: role.toUpperCase(),
+        isActive: 1
+      });
+      return res.status(201).json({ message: 'User account created successfully', user });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   /**
    * GET /api/users
    * Lists users with optional filters (role, search by name/email, isActive).

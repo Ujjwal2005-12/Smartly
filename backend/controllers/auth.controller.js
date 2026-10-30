@@ -1,4 +1,6 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const pool = require('../config/db');
 const userRepository = require('../repositories/userRepository');
 const { generateToken } = require('../utils/token');
 
@@ -9,6 +11,84 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Controller for user authentication & session management.
  */
 const authController = {
+  /**
+   * POST /api/auth/register-admin
+   * Creates the initial administrator once, with a server-configured setup token.
+   */
+  async registerAdmin(req, res, next) {
+    const { name, email, password, bootstrapToken } = req.body;
+    const configuredToken = process.env.ADMIN_BOOTSTRAP_TOKEN;
+    if (!configuredToken) {
+      return res.status(503).json({ message: 'Initial admin setup is not enabled on this server' });
+    }
+    if (typeof bootstrapToken !== 'string') {
+      return res.status(401).json({ message: 'Invalid admin setup token' });
+    }
+    const provided = Buffer.from(bootstrapToken);
+    const expected = Buffer.from(configuredToken);
+    if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
+      return res.status(401).json({ message: 'Invalid admin setup token' });
+    }
+
+    if (typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ message: 'Name must be at least 2 characters long' });
+    }
+    if (typeof email !== 'string' || !EMAIL_REGEX.test(email.trim())) {
+      return res.status(400).json({ message: 'A valid email is required' });
+    }
+    if (typeof password !== 'string' || password.length < 12) {
+      return res.status(400).json({ message: 'Admin password must be at least 12 characters long' });
+    }
+
+    let connection;
+    let lockAcquired = false;
+    try {
+      const normalizedEmail = email.trim();
+      if (await userRepository.findUserByEmail(normalizedEmail)) {
+        return res.status(409).json({ message: 'Email is already registered' });
+      }
+
+      connection = await pool.getConnection();
+      const [lockRows] = await connection.query('SELECT GET_LOCK(?, 10) AS acquired', ['smartly_admin_bootstrap']);
+      if (Number(lockRows[0]?.acquired) !== 1) {
+        return res.status(503).json({ message: 'Admin setup is busy; please try again' });
+      }
+      lockAcquired = true;
+
+      const [adminRows] = await connection.query("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1");
+      if (adminRows.length) {
+        return res.status(409).json({ message: 'An administrator account already exists' });
+      }
+      if (await userRepository.findUserByEmail(normalizedEmail)) {
+        return res.status(409).json({ message: 'Email is already registered' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await userRepository.create({
+        name: name.trim(),
+        email: normalizedEmail,
+        passwordHash,
+        role: 'ADMIN',
+        isActive: 1
+      });
+      const token = generateToken({ id: user.id, role: user.role });
+      return res.status(201).json({
+        message: 'Initial administrator account created successfully',
+        token,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      });
+    } catch (error) {
+      return next(error);
+    } finally {
+      if (connection) {
+        if (lockAcquired) {
+          try { await connection.query('SELECT RELEASE_LOCK(?)', ['smartly_admin_bootstrap']); } catch (_) { /* preserve request result */ }
+        }
+        connection.release();
+      }
+    }
+  },
+
   /**
    * POST /api/auth/register
    * Registers a new student account, hashes password, and returns JWT session.

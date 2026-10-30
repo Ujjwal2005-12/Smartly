@@ -1,20 +1,12 @@
 ﻿import React, { useState } from 'react';
-import { Search, Bell, ChevronDown, LogOut, User as UserIcon, Shield } from 'lucide-react';
+import { Search, Bell, ChevronDown, LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export const Topbar: React.FC = () => {
-  const { user, role, switchRole, logout, isBackendConnected } = useAuth();
+  const { user, role, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const navigate = useNavigate();
-
-  const handleRoleChange = (newRole: 'STUDENT' | 'FACULTY' | 'ADMIN') => {
-    switchRole(newRole);
-    setDropdownOpen(false);
-    if (newRole === 'STUDENT') navigate('/dashboard');
-    else if (newRole === 'FACULTY') navigate('/faculty/requests');
-    else if (newRole === 'ADMIN') navigate('/admin');
-  };
 
   const getRoleBadge = () => {
     switch (role) {
@@ -47,40 +39,6 @@ export const Topbar: React.FC = () => {
 
       {/* Right Controls */}
       <div className="flex items-center gap-4">
-        {/* Role Switcher Pills for easy preview */}
-        <div className="hidden lg:flex items-center bg-[#F3F7FC] p-0.5 rounded-lg border border-[#E1E8F0] text-[11px] font-medium text-[#718096]">
-          <button
-            onClick={() => handleRoleChange('STUDENT')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
-              role === 'STUDENT'
-                ? 'bg-white text-[#2166F3] shadow-xs font-semibold'
-                : 'hover:text-[#17243B]'
-            }`}
-          >
-            Student
-          </button>
-          <button
-            onClick={() => handleRoleChange('FACULTY')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
-              role === 'FACULTY'
-                ? 'bg-white text-[#2166F3] shadow-xs font-semibold'
-                : 'hover:text-[#17243B]'
-            }`}
-          >
-            Faculty
-          </button>
-          <button
-            onClick={() => handleRoleChange('ADMIN')}
-            className={`px-2.5 py-1 rounded-md transition-all ${
-              role === 'ADMIN'
-                ? 'bg-white text-[#2166F3] shadow-xs font-semibold'
-                : 'hover:text-[#17243B]'
-            }`}
-          >
-            Admin
-          </button>
-        </div>
-
         {/* Search Icon button */}
         <button className="text-[#718096] hover:text-[#17243B] p-2 rounded-lg hover:bg-[#F3F7FC] transition-colors">
           <Search size={18} />
@@ -134,30 +92,6 @@ export const Topbar: React.FC = () => {
                   <span>My Profile</span>
                 </button>
 
-                <div className="px-4 py-1 text-[10px] uppercase font-semibold text-[#718096] tracking-wider">
-                  Switch Active Role
-                </div>
-                <button
-                  onClick={() => handleRoleChange('STUDENT')}
-                  className="w-full flex items-center justify-between px-4 py-1.5 text-[12px] text-[#17243B] hover:bg-[#F3F7FC]"
-                >
-                  <span>Student View</span>
-                  {role === 'STUDENT' && <span className="text-[#20A875] text-[10px]">● Active</span>}
-                </button>
-                <button
-                  onClick={() => handleRoleChange('FACULTY')}
-                  className="w-full flex items-center justify-between px-4 py-1.5 text-[12px] text-[#17243B] hover:bg-[#F3F7FC]"
-                >
-                  <span>Faculty View</span>
-                  {role === 'FACULTY' && <span className="text-[#20A875] text-[10px]">● Active</span>}
-                </button>
-                <button
-                  onClick={() => handleRoleChange('ADMIN')}
-                  className="w-full flex items-center justify-between px-4 py-1.5 text-[12px] text-[#17243B] hover:bg-[#F3F7FC]"
-                >
-                  <span>Admin View</span>
-                  {role === 'ADMIN' && <span className="text-[#20A875] text-[10px]">● Active</span>}
-                </button>
               </div>
 
               <div className="border-t border-[#E1E8F0] pt-1">

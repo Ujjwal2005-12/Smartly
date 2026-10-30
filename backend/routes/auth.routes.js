@@ -7,6 +7,7 @@ const router = express.Router();
 
 // Public Authentication Routes
 router.post('/register', authController.register);
+router.post('/register-admin', authController.registerAdmin);
 router.post('/login', authController.login);
 
 // Authenticated User Session & Profile Routes

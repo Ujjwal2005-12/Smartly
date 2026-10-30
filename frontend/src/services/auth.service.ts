@@ -16,6 +16,19 @@ export const authService = {
     return res;
   },
 
+  /** Creates the one-time initial administrator account. */
+  async registerAdmin(name: string, email: string, password: string, bootstrapToken: string): Promise<{ token: string; user: User }> {
+    const res = await api.post<{ message: string; token: string; user: User }>('/auth/register-admin', {
+      name,
+      email,
+      password,
+      bootstrapToken,
+    });
+    setToken(res.token);
+    localStorage.setItem('smartly_user', JSON.stringify(res.user));
+    return res;
+  },
+
   /**
    * Authenticates user credentials against the backend.
    */

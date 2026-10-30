@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Search, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
 import { userService } from '../services/user.service';
 import { User, UserRole } from '../types';
 import { Modal } from '../components/common/Modal';
@@ -10,6 +10,11 @@ export const ManageUsersPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('FACULTY');
 
   // Edit User State
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -78,6 +83,32 @@ export const ManageUsersPage: React.FC = () => {
     }
   };
 
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await userService.createUser({
+        name: newName.trim(),
+        email: newEmail.trim(),
+        password: newPassword,
+        role: newRole,
+      });
+      setUsers((previous) => [...previous, result.user]);
+      setActionSuccess(`${result.user.role} account created for ${result.user.name}.`);
+      setTimeout(() => setActionSuccess(null), 3000);
+      setCreateOpen(false);
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('FACULTY');
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to create user account');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const filtered = users.filter((u) => {
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
     const matchesSearch =
@@ -89,8 +120,18 @@ export const ManageUsersPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#17243B] tracking-tight">Manage Users</h1>
-        <p className="text-[13px] text-[#718096] mt-0.5">Control institutional account privileges, roles, and access status.</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-[#17243B] tracking-tight">Manage Users</h1>
+            <p className="text-[13px] text-[#718096] mt-0.5">Control institutional account privileges, roles, and access status.</p>
+          </div>
+          <button
+            onClick={() => { setActionError(null); setCreateOpen(true); }}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#2166F3] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1a54cc]"
+          >
+            <UserPlus size={15} /> Create Account
+          </button>
+        </div>
       </div>
 
       {actionSuccess && (
@@ -287,6 +328,52 @@ export const ManageUsersPage: React.FC = () => {
               className="px-4 py-1.5 rounded-lg bg-[#2166F3] hover:bg-[#1a54cc] text-white font-semibold disabled:opacity-60"
             >
               {actionLoading ? 'Saving...' : 'Save User'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create User Account"
+      >
+        <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
+          {actionError && (
+            <div className="p-3 rounded-lg bg-[#FDEEF0] border border-[#F9C9CF] text-[#E65363] text-xs flex items-center gap-2">
+              <AlertCircle size={16} />
+              <span>{actionError}</span>
+            </div>
+          )}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#17243B] mb-1">Full Name</label>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} required minLength={2}
+              className="w-full bg-[#F8FAFC] border border-[#E1E8F0] rounded-lg px-3 py-2 text-xs text-[#17243B]" />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#17243B] mb-1">Email</label>
+            <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required
+              className="w-full bg-[#F8FAFC] border border-[#E1E8F0] rounded-lg px-3 py-2 text-xs text-[#17243B]" />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#17243B] mb-1">Temporary Password</label>
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8}
+              className="w-full bg-[#F8FAFC] border border-[#E1E8F0] rounded-lg px-3 py-2 text-xs text-[#17243B]" />
+            <p className="mt-1 text-[10px] text-[#718096]">Share this password securely; the user can change it after signing in.</p>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#17243B] mb-1">Account Role</label>
+            <select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)}
+              className="w-full bg-[#F8FAFC] border border-[#E1E8F0] rounded-lg px-2.5 py-2 text-xs text-[#17243B]">
+              <option value="STUDENT">Student</option>
+              <option value="FACULTY">Faculty</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setCreateOpen(false)} className="px-3 py-1.5 rounded-lg border border-[#E1E8F0] text-[#718096] hover:bg-[#F3F7FC]">Cancel</button>
+            <button type="submit" disabled={actionLoading} className="px-4 py-1.5 rounded-lg bg-[#2166F3] hover:bg-[#1a54cc] text-white font-semibold disabled:opacity-60">
+              {actionLoading ? 'Creating...' : 'Create Account'}
             </button>
           </div>
         </form>

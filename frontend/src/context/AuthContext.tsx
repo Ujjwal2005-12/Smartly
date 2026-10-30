@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { authService } from '../services/auth.service';
 import { api } from '../services/api';
-import { DEMO_USERS } from '../services/demoData';
 
 interface AuthContextType {
   user: User | null;
@@ -13,8 +12,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (name: string, email: string, password: string) => Promise<User>;
+  registerAdmin: (name: string, email: string, password: string, bootstrapToken: string) => Promise<User>;
   logout: () => void;
-  switchRole: (newRole: UserRole) => void;
   refreshUser: () => Promise<void>;
   checkConnection: () => Promise<void>;
 }
@@ -84,16 +83,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res.user;
   };
 
+  const registerAdmin = async (name: string, email: string, password: string, bootstrapToken: string): Promise<User> => {
+    const res = await authService.registerAdmin(name, email, password, bootstrapToken);
+    setUser(res.user);
+    setToken(res.token);
+    return res.user;
+  };
+
   const logout = () => {
     authService.logout();
     setUser(null);
     setToken(null);
-  };
-
-  const switchRole = (newRole: UserRole) => {
-    const demoUser = DEMO_USERS[newRole];
-    setUser(demoUser);
-    localStorage.setItem('smartly_user', JSON.stringify(demoUser));
   };
 
   const refreshUser = async () => {
@@ -118,8 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        registerAdmin,
         logout,
-        switchRole,
         refreshUser,
         checkConnection,
       }}

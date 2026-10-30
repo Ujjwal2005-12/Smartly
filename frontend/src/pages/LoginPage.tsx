@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, UserPlus, LogIn, User as UserIcon } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, UserPlus, LogIn, User as UserIcon, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
-  const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const [mode, setMode] = useState<'LOGIN' | 'REGISTER' | 'ADMIN_SETUP'>('LOGIN');
 
   // Login form state
-  const [email, setEmail] = useState('student@smartly.local');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // Register form state
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [bootstrapToken, setBootstrapToken] = useState('');
 
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -22,7 +23,7 @@ export const LoginPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { login, register, isBackendConnected } = useAuth();
+  const { login, register, registerAdmin, isBackendConnected } = useAuth();
   const navigate = useNavigate();
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -89,10 +90,26 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickFill = (roleEmail: string) => {
-    setEmail(roleEmail);
-    setPassword('password123');
+  const handleAdminSetupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError(null);
+    setSuccess(null);
+    if (regName.trim().length < 2) return setError('Full name must be at least 2 characters long.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) return setError('Please provide a valid email address.');
+    if (regPassword.length < 12) return setError('Admin password must be at least 12 characters long.');
+    if (regPassword !== regConfirmPassword) return setError('Password confirmation does not match.');
+    if (!bootstrapToken.trim()) return setError('Enter the admin setup token configured on the backend.');
+
+    setLoading(true);
+    try {
+      await registerAdmin(regName.trim(), regEmail.trim(), regPassword, bootstrapToken.trim());
+      setSuccess('Administrator created. Redirecting to the admin dashboard...');
+      setTimeout(() => navigate('/admin'), 1000);
+    } catch (err: any) {
+      setError(err.message || 'Admin setup failed. Check the setup token and whether an admin already exists.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -167,17 +184,19 @@ export const LoginPage: React.FC = () => {
           {/* Form Header */}
           <div className="mb-4">
             <h2 className="text-2xl font-bold text-[#17243B] tracking-tight">
-              {mode === 'LOGIN' ? 'Welcome Back' : 'Create Student Account'}
+              {mode === 'LOGIN' ? 'Welcome Back' : mode === 'ADMIN_SETUP' ? 'Set Up Administrator' : 'Create Student Account'}
             </h2>
             <p className="text-[13px] text-[#718096] mt-0.5">
               {mode === 'LOGIN'
                 ? 'Sign in to access campus facilities and schedules.'
-                : 'Register with your institutional credentials to request resources.'}
+                : mode === 'ADMIN_SETUP'
+                  ? 'Create the first administrator using the one-time backend setup token.'
+                  : 'Register with your institutional credentials to request resources.'}
             </p>
           </div>
 
-          {/* Tab Selector: Sign In vs Register */}
-          <div className="flex bg-[#F3F7FC] p-1 rounded-lg border border-[#E1E8F0] mb-4 text-xs font-semibold">
+          {/* Tab Selector */}
+          <div className="grid grid-cols-3 bg-[#F3F7FC] p-1 rounded-lg border border-[#E1E8F0] mb-4 text-[11px] font-semibold">
             <button
               type="button"
               onClick={() => {
@@ -185,7 +204,7 @@ export const LoginPage: React.FC = () => {
                 setError(null);
                 setSuccess(null);
               }}
-              className={`flex-1 py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
                 mode === 'LOGIN' ? 'bg-white text-[#2166F3] shadow-xs' : 'text-[#718096] hover:text-[#17243B]'
               }`}
             >
@@ -199,12 +218,22 @@ export const LoginPage: React.FC = () => {
                 setError(null);
                 setSuccess(null);
               }}
-              className={`flex-1 py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
                 mode === 'REGISTER' ? 'bg-white text-[#2166F3] shadow-xs' : 'text-[#718096] hover:text-[#17243B]'
               }`}
             >
               <UserPlus size={13} />
               <span>Register Student</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('ADMIN_SETUP'); setError(null); setSuccess(null); }}
+              className={`py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                mode === 'ADMIN_SETUP' ? 'bg-white text-[#2166F3] shadow-xs' : 'text-[#718096] hover:text-[#17243B]'
+              }`}
+            >
+              <Shield size={13} />
+              <span>First Admin</span>
             </button>
           </div>
 
@@ -326,7 +355,7 @@ export const LoginPage: React.FC = () => {
                 )}
               </button>
             </form>
-          ) : (
+          ) : mode === 'REGISTER' ? (
             /* Register Form */
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
               <div>
@@ -412,40 +441,41 @@ export const LoginPage: React.FC = () => {
                 {loading ? <span>Creating Account...</span> : <span>Register Student Account</span>}
               </button>
             </form>
+          ) : (
+            <form onSubmit={handleAdminSetupSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">Administrator Name</label>
+                <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} required minLength={2}
+                  className="w-full bg-white border border-[#E1E8F0] rounded-lg px-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">Administrator Email</label>
+                <input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required
+                  className="w-full bg-white border border-[#E1E8F0] rounded-lg px-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">Admin Setup Token</label>
+                <input type="password" value={bootstrapToken} onChange={(e) => setBootstrapToken(e.target.value)} required autoComplete="off"
+                  className="w-full bg-white border border-[#E1E8F0] rounded-lg px-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]" />
+                <p className="mt-1 text-[10px] text-[#718096]">Ask the system operator for the one-time token configured in the backend environment.</p>
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">Password (12+ characters)</label>
+                <input type={showPassword ? 'text' : 'password'} value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required minLength={12}
+                  className="w-full bg-white border border-[#E1E8F0] rounded-lg px-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#17243B] mb-1">Confirm Password</label>
+                <input type={showPassword ? 'text' : 'password'} value={regConfirmPassword} onChange={(e) => setRegConfirmPassword(e.target.value)} required minLength={12}
+                  className="w-full bg-white border border-[#E1E8F0] rounded-lg px-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]" />
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70">
+                {loading ? 'Setting up administrator...' : 'Create First Admin'}
+              </button>
+            </form>
           )}
 
-          {/* Quick Demo Credentials Fillers */}
-          <div className="mt-6 pt-4 border-t border-[#E1E8F0]">
-            <p className="text-[11px] font-semibold text-[#718096] uppercase tracking-wider mb-2">
-              Quick Fill Seed Accounts
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill('student@smartly.local')}
-                className="px-2.5 py-1.5 rounded-md border border-[#E1E8F0] bg-[#F8FAFC] hover:bg-[#EDF4FF] hover:border-[#2166F3] text-[11px] font-medium text-[#17243B] transition-colors text-center"
-              >
-                Student
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('faculty@smartly.local')}
-                className="px-2.5 py-1.5 rounded-md border border-[#E1E8F0] bg-[#F8FAFC] hover:bg-[#EDF4FF] hover:border-[#2166F3] text-[11px] font-medium text-[#17243B] transition-colors text-center"
-              >
-                Faculty
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('admin@smartly.local')}
-                className="px-2.5 py-1.5 rounded-md border border-[#E1E8F0] bg-[#F8FAFC] hover:bg-[#EDF4FF] hover:border-[#2166F3] text-[11px] font-medium text-[#17243B] transition-colors text-center"
-              >
-                Admin
-              </button>
-            </div>
-            <p className="text-[10px] text-[#718096] text-center mt-2">
-              Default password for all seeded accounts: <code>password123</code>
-            </p>
-          </div>
         </div>
       </div>
     </div>

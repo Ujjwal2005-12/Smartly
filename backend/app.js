@@ -8,11 +8,6 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
-// Determine allowed origins from environment or default local frontend origins
-const configuredOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-  : ['http://localhost:3000', 'http://127.0.0.1:3000'];
-
 // Core Middleware
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -21,7 +16,16 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 });
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean);
+const defaultOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+const allowedOrigins = (process.env.CORS_ORIGIN || defaultOrigins.join(','))
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
