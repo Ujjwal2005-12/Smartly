@@ -113,20 +113,24 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-[#F3F7FC]">
+    <div className="min-h-screen w-full flex bg-[#E9E5EF]">
       {/* Left Panel - Campus Hero */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-[#102448] overflow-hidden flex-col justify-between p-12 text-white">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-40 mix-blend-overlay"
-          style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1600&q=80')`,
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#102448] via-[#102448]/60 to-[#102448]/80" />
+      <div
+  className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col justify-between p-12 text-[#F4EFE7]"
+  style={{
+    backgroundColor: '#211B29',
+    backgroundImage: `
+      radial-gradient(ellipse at 15% 20%, rgba(118, 47, 75, 0.35), transparent 55%),
+      radial-gradient(ellipse at 85% 80%, rgba(87, 65, 111, 0.3), transparent 50%),
+      linear-gradient(145deg, #171719, #211B29 55%, #302638)
+    `,
+  }}
+>
+        
 
         {/* Top Logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#2166F3] flex items-center justify-center font-bold text-xl text-white shadow-md">
+          <div className="w-10 h-10 rounded-xl bg-[#762F4B] flex items-center justify-center font-bold text-xl text-white shadow-md">
             S
           </div>
           <span className="text-2xl font-bold tracking-tight">Smartly</span>
@@ -134,15 +138,15 @@ export const LoginPage: React.FC = () => {
 
         {/* Center Content */}
         <div className="relative z-10 max-w-lg">
-          <h1 className="text-4xl font-extrabold tracking-tight leading-tight mb-4">
+          <h1 className="font-serif text-5xl font-medium tracking-tight leading-tight mb-4 text-[#F4EFE7]">
             Access Flow Control Management System
           </h1>
-          <p className="text-slate-200 text-base leading-relaxed mb-6 font-normal">
+          <p className="text-[#C4B7C8] text-base leading-relaxed mb-6 font-normal">
             Manage classrooms, laboratories, auditoriums, and campus facilities with real-time conflict avoidance.
           </p>
 
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs text-white">
-            <span className="w-2 h-2 rounded-full bg-[#20A875]" />
+            <span className="w-2 h-2 rounded-full bg-[#78845B]" />
             <span>Campus Real-Time Scheduling Engine</span>
           </div>
         </div>
@@ -157,11 +161,11 @@ export const LoginPage: React.FC = () => {
       </div>
 
       {/* Right Panel - Sign In & Registration Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 bg-white overflow-y-auto">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 lg:p-16 bg-[#E9E5EF] overflow-y-auto">
         <div className="w-full max-w-md">
           {/* Mobile Smartly Brand */}
           <div className="flex items-center gap-3 mb-6 lg:hidden">
-            <div className="w-9 h-9 rounded-xl bg-[#2166F3] flex items-center justify-center font-bold text-lg text-white">
+            <div className="w-9 h-9 rounded-xl bg-[#762F4B] hover:bg-[#963E58] flex items-center justify-center font-bold text-lg text-white">
               S
             </div>
             <div>
@@ -172,7 +176,7 @@ export const LoginPage: React.FC = () => {
 
           {/* Desktop Logo Header */}
           <div className="hidden lg:flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-[#2166F3] flex items-center justify-center font-bold text-base text-white">
+            <div className="w-8 h-8 rounded-lg bg-[#762F4B] hover:bg-[#963E58] flex items-center justify-center font-bold text-base text-white">
               S
             </div>
             <div>
@@ -286,7 +290,7 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="student@smartly.local"
                     required
-                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-3.5 py-2.5 text-xs text-[#17243B] placeholder-[#718096] focus:outline-none focus:border-[#2166F3] focus:ring-1 focus:ring-[#2166F3] transition-all"
+                    className="w-full bg-[#F7F4F8] border border-[#D6CBDD] rounded-lg pl-10 pr-3.5 py-2.5 text-xs text-[#25212C] placeholder-[#857B8C] focus:outline-none focus:border-[#78647F] focus:ring-1 focus:ring-[#78647F] transition-all"
                   />
                 </div>
               </div>
@@ -306,7 +310,7 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
                     required
-                    className="w-full bg-white border border-[#E1E8F0] rounded-lg pl-10 pr-10 py-2.5 text-xs text-[#17243B] placeholder-[#718096] focus:outline-none focus:border-[#2166F3] focus:ring-1 focus:ring-[#2166F3] transition-all"
+                    className="w-full bg-[#F7F4F8] border border-[#D6CBDD] rounded-lg pl-10 pr-10 py-2.5 text-xs text-[#25212C] placeholder-[#857B8C] focus:outline-none focus:border-[#78647F] focus:ring-1 focus:ring-[#78647F] transition-all"
                   />
                   <button
                     type="button"
@@ -343,7 +347,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
+                className="w-full bg-[#762F4B] hover:bg-[#963E58] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <span>Authenticating...</span>
@@ -436,7 +440,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2 mt-2"
+                className="w-full bg-[#762F4B] hover:bg-[#963E58] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? <span>Creating Account...</span> : <span>Register Student Account</span>}
               </button>
@@ -470,7 +474,7 @@ export const LoginPage: React.FC = () => {
                   className="w-full bg-white border border-[#E1E8F0] rounded-lg px-3.5 py-2 text-xs text-[#17243B] focus:outline-none focus:border-[#2166F3]" />
               </div>
               <button type="submit" disabled={loading}
-                className="w-full bg-[#2166F3] hover:bg-[#1a54cc] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70">
+                className="w-full bg-[#762F4B] hover:bg-[#963E58] text-white py-2.5 px-4 rounded-lg font-semibold text-xs tracking-wide transition-colors shadow-sm disabled:opacity-70">
                 {loading ? 'Setting up administrator...' : 'Create First Admin'}
               </button>
             </form>
